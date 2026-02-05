@@ -112,8 +112,8 @@ class Database:
         return venue
     
     def filter_venues(self, ward=None, postcode_sector=None, amenity=None, 
-                     cuisine=None, min_rating=None, visited=None, 
-                     interest_status=None, business_status='OPERATIONAL'):
+                      cuisine=None, min_rating=None, visited=None, 
+                      interest_status=None, business_status='OPERATIONAL'):
         query = self.session.query(Venue)
         
         if business_status:
@@ -220,7 +220,7 @@ class Database:
                 self.session.add(venue)
                 count += 1
                 
-            except Exception as e:
+            except Exception:
                 errors += 1
                 continue
         
@@ -390,8 +390,14 @@ def get_database():
 db = get_database()
 
 # ============================================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (with persistent page state)
 # ============================================================================
+
+if "page" not in st.session_state:
+    st.session_state["page"] = "📊 Dashboard"
+
+def set_page(p):
+    st.session_state["page"] = p
 
 st.sidebar.title("🍽️ Bristol Venues Survey")
 st.sidebar.markdown("---")
@@ -399,8 +405,12 @@ st.sidebar.markdown("---")
 page = st.sidebar.radio(
     "Navigation",
     ["📊 Dashboard", "🗺️ Map View", "📋 Venue List", "📤 Export", "⚙️ Settings"],
-    index=0
+    index=["📊 Dashboard", "🗺️ Map View", "📋 Venue List", "📤 Export", "⚙️ Settings"].index(
+        st.session_state["page"]
+    ),
+    key="nav_radio",
 )
+st.session_state["page"] = page
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### Quick Stats")
@@ -413,7 +423,7 @@ st.sidebar.metric("Hot Leads", stats['interested'])
 # PAGE: DASHBOARD
 # ============================================================================
 
-if page == "📊 Dashboard":
+if st.session_state["page"] == "📊 Dashboard":
     st.title("📊 Survey Dashboard")
     st.markdown("Track your Bristol venue survey progress and TwoTable lead generation")
     
@@ -476,8 +486,13 @@ if page == "📊 Dashboard":
                 'Interest': ['Interested', 'Not Interested'],
                 'Count': [stats['interested'], stats['not_interested']]
             })
-            st.bar_chart(interest_data.set_index('Interest'), height=300, color=['#10B981', '#6B7280'])
+            st.bar_chart(
+                interest_data.set_index('Interest'),
+                height=300,
+                color="#10B981",
+            )
         else:
+            
             st.info("No visited venues yet")
     
     st.markdown("---")
@@ -517,31 +532,31 @@ if page == "📊 Dashboard":
     with col1:
         if st.button("🟢 View Hot Leads", use_container_width=True):
             st.session_state['quick_filter'] = 'interested'
-            st.session_state['page'] = '📋 Venue List'
+            set_page("📋 Venue List")
             st.rerun()
     
     with col2:
         if st.button("🔴 View Unvisited", use_container_width=True):
             st.session_state['quick_filter'] = 'not_visited'
-            st.session_state['page'] = '🗺️ Map View'
+            set_page("🗺️ Map View")
             st.rerun()
     
     with col3:
         if st.button("⚪ View Not Interested", use_container_width=True):
             st.session_state['quick_filter'] = 'not_interested'
-            st.session_state['page'] = '📋 Venue List'
+            set_page("📋 Venue List")
             st.rerun()
     
     with col4:
         if st.button("📊 Export All Data", use_container_width=True):
-            st.session_state['page'] = '📤 Export'
+            set_page("📤 Export")
             st.rerun()
 
 # ============================================================================
 # PAGE: MAP VIEW
 # ============================================================================
 
-elif page == "🗺️ Map View":
+elif st.session_state["page"] == "🗺️ Map View":
     st.title("🗺️ Interactive Map View")
     st.markdown("Explore all Bristol venues on an interactive map")
     
@@ -556,29 +571,31 @@ elif page == "🗺️ Map View":
     cuisines = sorted(set(v.cuisine for v in all_venues if v.cuisine))
     
     with col1:
-        filter_ward = st.selectbox("Ward/Area", ["All"] + wards)
+        filter_ward = st.selectbox("Ward/Area", ["All"] + wards, key="map_ward")
     
     with col2:
-        filter_postcode = st.selectbox("Postcode Sector", ["All"] + postcodes)
+        filter_postcode = st.selectbox("Postcode Sector", ["All"] + postcodes, key="map_postcode")
     
     with col3:
-        filter_amenity = st.selectbox("Venue Type", ["All"] + amenities)
+        filter_amenity = st.selectbox("Venue Type", ["All"] + amenities, key="map_amenity")
     
     with col4:
-        filter_cuisine = st.selectbox("Cuisine", ["All"] + cuisines)
+        filter_cuisine = st.selectbox("Cuisine", ["All"] + cuisines, key="map_cuisine")
     
     col5, col6, col7 = st.columns(3)
     
     with col5:
-        filter_rating = st.slider("Minimum Rating", 0.0, 5.0, 0.0, 0.5)
+        filter_rating = st.slider("Minimum Rating", 0.0, 5.0, 0.0, 0.5, key="map_rating")
     
     with col6:
-        filter_status = st.selectbox("Survey Status", 
-            ["All", "Not Visited", "Visited", "Interested", "Not Interested"]
+        filter_status = st.selectbox(
+            "Survey Status",
+            ["All", "Not Visited", "Visited", "Interested", "Not Interested"],
+            key="map_status"
         )
     
     with col7:
-        show_closed = st.checkbox("Show closed venues", value=False)
+        show_closed = st.checkbox("Show closed venues", value=False, key="map_show_closed")
     
     # Apply filters
     visited_filter = None
@@ -651,7 +668,7 @@ elif page == "🗺️ Map View":
 # PAGE: VENUE LIST
 # ============================================================================
 
-elif page == "📋 Venue List":
+elif st.session_state["page"] == "📋 Venue List":
     st.title("📋 Venue List")
     st.markdown("Browse and manage all venues")
     
@@ -665,7 +682,8 @@ elif page == "📋 Venue List":
         filter_ward = st.selectbox("Filter by Ward", ["All"] + wards, key="list_ward")
     
     with col2:
-        filter_status = st.selectbox("Filter by Status", 
+        filter_status = st.selectbox(
+            "Filter by Status", 
             ["All", "Not Visited", "Visited", "Interested", "Not Interested"],
             key="list_status"
         )
@@ -692,9 +710,20 @@ elif page == "📋 Venue List":
         interest_status=interest_filter
     )
     
+    # Apply quick filter from dashboard if present
+    quick_filter = st.session_state.get('quick_filter')
+    if quick_filter == 'interested':
+        venues = [v for v in venues if v.interest_status == 'interested']
+    elif quick_filter == 'not_visited':
+        venues = [v for v in venues if not v.visited]
+    elif quick_filter == 'not_interested':
+        venues = [v for v in venues if v.interest_status == 'not_interested']
+    # Clear quick_filter after first use
+    st.session_state['quick_filter'] = None
+    
     # Search filter
     if search_query:
-        venues = [v for v in venues if search_query.lower() in v.google_name.lower()]
+        venues = [v for v in venues if v.google_name and search_query.lower() in v.google_name.lower()]
     
     st.info(f"Showing **{len(venues)}** venues")
     
@@ -763,11 +792,10 @@ elif page == "📋 Venue List":
                 if not venue.visited:
                     if st.button("✓ Mark as Visited", key=f"visit_{venue.id}", use_container_width=True):
                         st.session_state[f'marking_visited_{venue.id}'] = True
-                        st.rerun()
+                        # no immediate rerun; state will be picked up on next rerun
                 else:
                     if st.button("📝 Edit Status", key=f"edit_{venue.id}", use_container_width=True):
                         st.session_state[f'editing_{venue.id}'] = True
-                        st.rerun()
             
             # Mark as visited modal
             if st.session_state.get(f'marking_visited_{venue.id}', False):
@@ -790,8 +818,6 @@ elif page == "📋 Venue List":
                 with col_a:
                     if st.button("Cancel", key=f"cancel_{venue.id}", use_container_width=True):
                         st.session_state[f'marking_visited_{venue.id}'] = False
-                        st.rerun()
-                
                 with col_b:
                     if st.button("💾 Save", key=f"save_{venue.id}", type="primary", use_container_width=True):
                         db.update_venue(venue.id, {
@@ -828,8 +854,6 @@ elif page == "📋 Venue List":
                 with col_a:
                     if st.button("Cancel", key=f"edit_cancel_{venue.id}", use_container_width=True):
                         st.session_state[f'editing_{venue.id}'] = False
-                        st.rerun()
-                
                 with col_b:
                     if st.button("💾 Update", key=f"update_{venue.id}", type="primary", use_container_width=True):
                         db.update_venue(venue.id, {
@@ -844,7 +868,7 @@ elif page == "📋 Venue List":
 # PAGE: EXPORT
 # ============================================================================
 
-elif page == "📤 Export":
+elif st.session_state["page"] == "📤 Export":
     st.title("📤 Export Data")
     st.markdown("Download venue data in CSV format")
     
@@ -878,8 +902,9 @@ elif page == "📤 Export":
             export_venues = db.filter_venues(visited=True)
         else:
             st.markdown("**Custom Filter Options:**")
-            custom_ward = st.selectbox("Ward", ["All"] + sorted(set(v.search_ward for v in db.get_all_venues() if v.search_ward)))
-            custom_amenity = st.selectbox("Type", ["All"] + sorted(set(v.amenity for v in db.get_all_venues() if v.amenity)))
+            all_db_venues = db.get_all_venues()
+            custom_ward = st.selectbox("Ward", ["All"] + sorted(set(v.search_ward for v in all_db_venues if v.search_ward)))
+            custom_amenity = st.selectbox("Type", ["All"] + sorted(set(v.amenity for v in all_db_venues if v.amenity)))
             
             export_venues = db.filter_venues(
                 ward=custom_ward if custom_ward != "All" else None,
@@ -958,7 +983,7 @@ elif page == "📤 Export":
 # PAGE: SETTINGS
 # ============================================================================
 
-elif page == "⚙️ Settings":
+elif st.session_state["page"] == "⚙️ Settings":
     st.title("⚙️ Settings")
     
     tab1, tab2, tab3 = st.tabs(["📁 Import Data", "🗄️ Database", "ℹ️ About"])
